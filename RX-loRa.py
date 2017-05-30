@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 import spidev
-#|import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO
 import time
 
 _slaveSelectPin = 17        #SPI Chip select input
@@ -10,12 +10,10 @@ currentMode             =   0x81
 #msg[]
 
 #establecemos el sistema de numeracion que queramos, en mi caso BCM
-#|GPIO.setmode(GPIO.BCM)
+GPIO.setmode(GPIO.BCM)
 
 #configuramos el pin GPIO17 como una salida
-#|GPIO.setup(_slaveSelectPin, GPIO.OUT)
-
-
+GPIO.setup(_slaveSelectPin, GPIO.OUT)
 
 
 REG_FIFO 		         =   0x00
@@ -76,7 +74,7 @@ ModemConfig2             =   0x64
 def setLoRaMode():
     MODE_SLEEP()
     writeRegister(REG_OPMODE, 0x80)
-    return "LoRa mode set"
+    return print("LoRa mode set")
 
 def setMode(newMode):
 #	if (newMode == currentMode)
@@ -85,33 +83,31 @@ def setMode(newMode):
 
 #Method:   Read Register
 def readRegister(addr):
-    print("readRegister", addr)
+    print("readRegister", hex(addr))
+    to_send = (addr & 0x7F)
     select()
-    to_send = [addr]
-    #|spi.writebytes(to_send)
-    #|regval=spi.readbytes(1)
-    regval= 'ok'
+    spi.xfer2([to_send])
+    regval=spi.readbytes(1)
     unselect()
     return regval
 
 
 #Method:   Write Register
 def writeRegister(addr, value):
-    print("writeRegister", addr , 'value', value)
+    print("writeRegister", hex(addr) , 'value to write', hex(value))
+    addr=(addr | 0x80)
+    config=[addr , value]
     select()
-    #|spi.writebytes(addr)
-    #|spi.writebytes(value)
+    spi.xfer2(config)
     unselect()
 
 #Method:   Select Transceiver
 def select():
-    print("high")
-    #|GPIO.output(_slaveSelectPin, GPIO.HIGH)
+    GPIO.output(_slaveSelectPin, GPIO.LOW)
 
 #Method:   UNSelect Transceiver
 def unselect():
-    print("low")
-    #|GPIO.output(_slaveSelectPin, GPIO.LOW)
+    GPIO.output(_slaveSelectPin, GPIO.HIGH)
 
 
 #MODES
@@ -132,29 +128,73 @@ def MODE_SLEEP():
     print("Changing to Sleep Mode")
 
 def MODE_STANDBY():
-    writeRegister(REG_OPMODE, RF92_MODE_STANDBY);
-    print("Changing to Standby Mode");
+    writeRegister(REG_OPMODE, RF92_MODE_STANDBY)
+    print("Changing to Standby Mode")
+
+
+
+#Method:   Setup to receive continuously
+def startReceiving():
+    MODE_STANDBY()
+    time.sleep(.1)
+    #Turn on implicit header mode and set payload length
+    writeRegister(REG_MODEM_CONFIG, IMPLICIT_MODE)
+    writeRegister(REG_PAYLOAD_LENGTH, PAYLOAD_LENGTH)
+    writeRegister(REG_HOP_PERIOD, 0xFF)
+    RegFifoRxBaseAd = readRegister(REG_FIFO_RX_BASE_AD)     #RegFifoRxBaseAddr indicates the point in the data buffer where information will be written to in event of a receive operation
+    writeRegister(REG_FIFO_ADDR_PTR, RegFifoRxBaseAd[0])
+    #Preamble config
+    writeRegister(RegPreambleMsb, 0x00);
+    writeRegister(RegPreambleLsb, 0x0C);
+    #Optimese the LoRa modulation
+    writeRegister(REG_MODEM_CONFIG2, ModemConfig2)
+    writeRegister(RegDetectOptimize, DetectOptimize)
+    writeRegister(RegDetectionThreshold, DetectionThreshold)
+    #Setup Receive Continous Mode
+    MODE_RX_CONTINUOS()
+    time.sleep(.1)
+
+#Method:   Receive FROM BUFFER
+def receiveMessage():
+    currentAddr = readRegister(REG_FIFO_RX_CURRENT_ADDR)
+    receivedCount = readRegister(REG_RX_NB_BYTES)
+    print("Packet! RX Current Addr: ", hex(currentAddr))
+    print("Number of bytes received: ", hex(receivedCount))
+    writeRegister(REG_FIFO_ADDR_PTR, currentAddr)
+    #now loop over the fifo getting the data
+    i=0
+    while (i <= receivedCount):
+        message[i] = readRegister(REG_FIFO)
+        i=i+1
+    return message
 
 
 spi = spidev.SpiDev()
-#|spi.open(0,0)
+spi.open(0,1)
 time.sleep(3)
 
-
 setLoRaMode()
-#type(REG_IRQ_FLAGS)
+startReceiving()
+print("Setup Complete")
 
-#dato=readRegister(REG_IRQ_FLAGS)
-#print(dato)
+while True:
+    time.sleep(1)
+    x = readRegister(REG_IRQ_FLAGS)
+    print(".")
 
-#writeRegister(REG_IRQ_FLAGS,REG_IRQ_FLAGS)
+    if ((x[0] & 0x20) == 0x20):
+        print("Oops there was a crc problem!!")
+        writeRegister(REG_IRQ_FLAGS, 0x60)
+    elif ((x[0] & 0x40) == 0x40):
+        print("rxDone flag")
+        msg=receiveMessage()
+        writeRegister(REG_IRQ_FLAGS, 0x40)
+        time.sleep(0.1)
+        print(msg)
 
-#MODE_SLEEP()
-#MODE_RX_CONTINUOS()
-#MODE_TX()
-MODE_STANDBY()
 reg_print=readRegister(REG_OPMODE)
 
-#|GPIO.cleanup()  #devuelve los pines a su estado inicial
-#|spi.close()
-print(reg_print)
+GPIO.cleanup()  #devuelve los pines a su estado inicial
+spi.close()
+
+print(format(reg_print[0], '02x'))
