@@ -5,7 +5,8 @@ import RPi.GPIO as GPIO
 import time
 
 _slaveSelectPin = 17        #SPI Chip select input
-payload="0123ABCDEF"
+#payload="0123ABCDEF"
+payload=[0,1,2,3,4,5,6,7,8,9]
 
 #establecemos el sistema de numeracion que queramos, en mi caso BCM
 GPIO.setmode(GPIO.BCM)
@@ -177,9 +178,9 @@ def sendData(buffer):
     listBuffer=[None]*listLen
     listBuffer[0]=addr
     while (i < len(buffer)):
+        #listBuffer[i+1]=0xFF
         listBuffer[i+1]=buffer[i]
         i=i+1
-
     select()
     spi.xfer2(listBuffer)
     unselect()
@@ -188,9 +189,11 @@ def sendData(buffer):
     MODE_TX()
     print("sending")
     x = readRegister(REG_IRQ_FLAGS)
+    print('into method: ',x[0])
     #once TxDone has flipped, everything has been sent
     while ((x[0] & 0x08) == 0x00):
-        print(".")
+        x = readRegister(REG_IRQ_FLAGS)
+        print('into while: ',x[0])
     print(" done sending!")
     #clear the flags 0x08 is the TxDone flag
     writeRegister(REG_IRQ_FLAGS, 0x08)
@@ -225,7 +228,8 @@ print("Setup Complete")
 while True:
     sendData(payload)
     time.sleep(10)
-
+    x = readRegister(REG_IRQ_FLAGS)
+    print('after sleep: ',x[0])
 
 reg_print=readRegister(REG_OPMODE)
 
