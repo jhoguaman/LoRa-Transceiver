@@ -4,12 +4,12 @@ import time
 
 _slaveSelectPin = 17        #SPI Chip select input
 content = ""
-currentMode             =   0x81
+currentMode              =   0x81
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(_slaveSelectPin, GPIO.OUT)
 
-REG_FIFO 		         =   0x00
+REG_FIFO                 =   0x00
 REG_FIFO_ADDR_PTR        =   0x0D
 REG_FIFO_TX_BASE_AD      =   0x0E
 REG_FIFO_RX_BASE_AD      =   0x0F
