@@ -1,5 +1,3 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 import spidev
 import RPi.GPIO as GPIO
 import time
@@ -7,12 +5,8 @@ import time
 _slaveSelectPin = 17        #SPI Chip select input
 content = ""
 currentMode             =   0x81
-#msg[]
 
-#establecemos el sistema de numeracion que queramos, en mi caso BCM
 GPIO.setmode(GPIO.BCM)
-
-#configuramos el pin GPIO17 como una salida
 GPIO.setup(_slaveSelectPin, GPIO.OUT)
 
 
@@ -52,7 +46,7 @@ PA_OFF_BOOST             =   0x00
 
 #LOW NOISE AMPLIFIER
 REG_LNA                  =   0x0C
-LNA_MAX_GAIN             =   0x23  # 0010 0011
+LNA_MAX_GAIN             =   0x23
 LNA_OFF_GAIN             =   0x00
 
 REG_PA_DAC               =   0x5A
@@ -70,20 +64,13 @@ DetectOptimize           =   0x05
 DetectionThreshold       =   0x0C
 ModemConfig2             =   0x64
 
-
 def setLoRaMode():
     MODE_SLEEP()
     writeRegister(REG_OPMODE, 0x80)
     return print("LoRa mode set")
 
-def setMode(newMode):
-#	if (newMode == currentMode)
-    return
-
-
 #Method:   Read Register
 def readRegister(addr):
-    print("readRegister", hex(addr))
     to_send = (addr & 0x7F)
     select()
     spi.xfer2([to_send])
@@ -91,10 +78,8 @@ def readRegister(addr):
     unselect()
     return regval
 
-
 #Method:   Write Register
 def writeRegister(addr, value):
-    print("writeRegister", hex(addr) , 'value to write', hex(value))
     addr=(addr | 0x80)
     config=[addr , value]
     select()
@@ -131,8 +116,6 @@ def MODE_STANDBY():
     writeRegister(REG_OPMODE, RF92_MODE_STANDBY)
     print("Changing to Standby Mode")
 
-
-
 #Method:   Setup to receive continuously
 def startReceiving():
     MODE_STANDBY()
@@ -141,7 +124,7 @@ def startReceiving():
     writeRegister(REG_MODEM_CONFIG, IMPLICIT_MODE)
     writeRegister(REG_PAYLOAD_LENGTH, PAYLOAD_LENGTH)
     writeRegister(REG_HOP_PERIOD, 0xFF)
-    RegFifoRxBaseAd = readRegister(REG_FIFO_RX_BASE_AD)     #RegFifoRxBaseAddr indicates the point in the data buffer where information will be written to in event of a receive operation
+    RegFifoRxBaseAd = readRegister(REG_FIFO_RX_BASE_AD)
     writeRegister(REG_FIFO_ADDR_PTR, RegFifoRxBaseAd[0])
     #Preamble config
     writeRegister(RegPreambleMsb, 0x00);
@@ -192,9 +175,5 @@ while True:
         time.sleep(0.1)
         print(msg)
 
-reg_print=readRegister(REG_OPMODE)
-
 GPIO.cleanup()  #devuelve los pines a su estado inicial
 spi.close()
-
-print(format(reg_print[0], '02x'))
