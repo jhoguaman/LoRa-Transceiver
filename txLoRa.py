@@ -7,7 +7,7 @@ GPIO.setmode(GPIO.BCM)                  #numeration system of pins BCM o BOARD
 GPIO.setup(_slaveSelectPin, GPIO.OUT)   #set GPIO17 as output
 
 #REGISTERS
-REG_FIFO 		         =   0x00
+REG_FIFO                 =   0x00
 REG_FIFO_ADDR_PTR        =   0x0D
 REG_FIFO_TX_BASE_AD      =   0x0E
 REG_FIFO_RX_BASE_AD      =   0x0F
