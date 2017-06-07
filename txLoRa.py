@@ -1,5 +1,3 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 import spidev
 import RPi.GPIO as GPIO
 import time
