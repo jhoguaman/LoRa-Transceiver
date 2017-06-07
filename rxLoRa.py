@@ -9,7 +9,6 @@ currentMode             =   0x81
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(_slaveSelectPin, GPIO.OUT)
 
-
 REG_FIFO 		         =   0x00
 REG_FIFO_ADDR_PTR        =   0x0D
 REG_FIFO_TX_BASE_AD      =   0x0E
@@ -46,7 +45,7 @@ PA_OFF_BOOST             =   0x00
 
 #LOW NOISE AMPLIFIER
 REG_LNA                  =   0x0C
-LNA_MAX_GAIN             =   0x23
+LNA_MAX_GAIN             =   0x23  # 0010 0011
 LNA_OFF_GAIN             =   0x00
 
 REG_PA_DAC               =   0x5A
@@ -94,7 +93,6 @@ def select():
 def unselect():
     GPIO.output(_slaveSelectPin, GPIO.HIGH)
 
-
 #MODES
 def MODE_RX_CONTINUOS():
     writeRegister(REG_PA_CONFIG, PA_OFF_BOOST)      #TURN PA OFF FOR RECIEVE??
@@ -124,11 +122,11 @@ def startReceiving():
     writeRegister(REG_MODEM_CONFIG, IMPLICIT_MODE)
     writeRegister(REG_PAYLOAD_LENGTH, PAYLOAD_LENGTH)
     writeRegister(REG_HOP_PERIOD, 0xFF)
-    RegFifoRxBaseAd = readRegister(REG_FIFO_RX_BASE_AD)
+    RegFifoRxBaseAd = readRegister(REG_FIFO_RX_BASE_AD)     #RegFifoRxBaseAddr indicates the point in the data buffer where information will be written to in event of a receive operation
     writeRegister(REG_FIFO_ADDR_PTR, RegFifoRxBaseAd[0])
     #Preamble config
-    writeRegister(RegPreambleMsb, 0x00);
-    writeRegister(RegPreambleLsb, 0x0C);
+    writeRegister(RegPreambleMsb, 0x00)
+    writeRegister(RegPreambleLsb, 0x0C)
     #Optimese the LoRa modulation
     writeRegister(REG_MODEM_CONFIG2, ModemConfig2)
     writeRegister(RegDetectOptimize, DetectOptimize)
@@ -141,17 +139,18 @@ def startReceiving():
 def receiveMessage():
     currentAddr = readRegister(REG_FIFO_RX_CURRENT_ADDR)
     receivedCount = readRegister(REG_RX_NB_BYTES)
-    print("Packet! RX Current Addr: ", hex(currentAddr))
-    print("Number of bytes received: ", hex(receivedCount))
-    writeRegister(REG_FIFO_ADDR_PTR, currentAddr)
+    print("Packet! RX Current Addr: ", hex(currentAddr[0]))
+    print("Number of bytes received: ", hex(receivedCount[0]))
+    writeRegister(REG_FIFO_ADDR_PTR, currentAddr[0])
     #now loop over the fifo getting the data
     i=0
-    while (i <= receivedCount):
+    message=[None]*receivedCount[0]
+    while (i < receivedCount[0]):
         message[i] = readRegister(REG_FIFO)
         i=i+1
     return message
 
-
+#INIT PROGRAM
 spi = spidev.SpiDev()
 spi.open(0,1)
 time.sleep(3)
