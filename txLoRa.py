@@ -4,16 +4,11 @@ import spidev
 import RPi.GPIO as GPIO
 import time
 
-_slaveSelectPin = 17        #SPI Chip select input
-payload="0123ABCDEF"
+_slaveSelectPin = 17                    #SPI Chip select input
+GPIO.setmode(GPIO.BCM)                  #numeration system of pins BCM o BOARD
+GPIO.setup(_slaveSelectPin, GPIO.OUT)   #set GPIO17 as output
 
-#establecemos el sistema de numeracion que queramos, en mi caso BCM
-GPIO.setmode(GPIO.BCM)
-
-#configuramos el pin GPIO17 como una salida
-GPIO.setup(_slaveSelectPin, GPIO.OUT)
-
-
+#REGISTERS
 REG_FIFO 		         =   0x00
 REG_FIFO_ADDR_PTR        =   0x0D
 REG_FIFO_TX_BASE_AD      =   0x0E
@@ -50,7 +45,7 @@ PA_OFF_BOOST             =   0x00
 
 #LOW NOISE AMPLIFIER
 REG_LNA                  =   0x0C
-LNA_MAX_GAIN             =   0x23  # 0010 0011
+LNA_MAX_GAIN             =   0x23
 LNA_OFF_GAIN             =   0x00
 
 REG_PA_DAC               =   0x5A
@@ -68,7 +63,6 @@ DetectOptimize           =   0x05
 DetectionThreshold       =   0x0C
 ModemConfig2             =   0x64
 
-
 def setLoRaMode():
     MODE_SLEEP()
     writeRegister(REG_OPMODE, 0x80)
@@ -76,7 +70,6 @@ def setLoRaMode():
 
 #Method:   Read Register
 def readRegister(addr):
-    print("readRegister", hex(addr))
     to_send = (addr & 0x7F)
     select()
     spi.xfer2([to_send])
@@ -86,7 +79,6 @@ def readRegister(addr):
 
 #Method:   Write Register
 def writeRegister(addr, value):
-    print("writeRegister", hex(addr) , 'value to write', hex(value))
     addr=(addr | 0x80)
     config=[addr , value]
     select()
@@ -101,17 +93,16 @@ def select():
 def unselect():
     GPIO.output(_slaveSelectPin, GPIO.HIGH)
 
-
-#MODES
+#CONFIGURATION MODES
 def MODE_RX_CONTINUOS():
-    writeRegister(REG_PA_CONFIG, PA_OFF_BOOST)      #TURN PA OFF FOR RECIEVE??
-    writeRegister(REG_LNA, LNA_MAX_GAIN)            #MAX GAIN FOR RECIEVE
+    writeRegister(REG_PA_CONFIG, PA_OFF_BOOST)
+    writeRegister(REG_LNA, LNA_MAX_GAIN)
     writeRegister(REG_OPMODE, RF92_MODE_RX_CONTINUOS)
     print("Changing to Receive Continous Mode")
 
 def MODE_TX():
-    writeRegister(REG_LNA, LNA_OFF_GAIN)            #TURN LNA OFF FOR TRANSMITT
-    writeRegister(REG_PA_CONFIG, PA_MAX_BOOST)      #TURN PA TO MAX POWER
+    writeRegister(REG_LNA, LNA_OFF_GAIN)
+    writeRegister(REG_PA_CONFIG, PA_MAX_BOOST)
     writeRegister(REG_OPMODE, RF92_MODE_TX)
     print("Changing to Transmit Mode")
 
@@ -123,17 +114,15 @@ def MODE_STANDBY():
     writeRegister(REG_OPMODE, RF92_MODE_STANDBY)
     print("Changing to Standby Mode")
 
-
-
 #Method:   Setup to receive continuously
 def startReceiving():
     MODE_STANDBY()
     time.sleep(.1)
-    #Turn on implicit header mode and set payload length
-    writeRegister(REG_MODEM_CONFIG, IMPLICIT_MODE)
-    writeRegister(REG_PAYLOAD_LENGTH, PAYLOAD_LENGTH)
+
+    writeRegister(REG_MODEM_CONFIG, IMPLICIT_MODE)      #Turn on implicit header mode
+    writeRegister(REG_PAYLOAD_LENGTH, PAYLOAD_LENGTH)   #set payload length
     writeRegister(REG_HOP_PERIOD, 0xFF)
-    RegFifoRxBaseAd = readRegister(REG_FIFO_RX_BASE_AD)     #RegFifoRxBaseAddr indicates the point in the data buffer where information will be written to in event of a receive operation
+    RegFifoRxBaseAd = readRegister(REG_FIFO_RX_BASE_AD) #RegFifoRxBaseAddr indicates the point in the data buffer where information will be written to in event of a receive operation
     writeRegister(REG_FIFO_ADDR_PTR, RegFifoRxBaseAd[0])
     #Preamble config
     writeRegister(RegPreambleMsb, 0x00)
@@ -161,40 +150,28 @@ def receiveMessage():
         i=i+1
     return message
 
-
 #Method:   Send TO BUFFER
 def sendData(buffer):
-    print("Sending: ")
-    print(buffer)
+    print("Sending: ",buffer)
     MODE_STANDBY()
-
     writeRegister(REG_FIFO_TX_BASE_AD, 0x00)    # Update the address ptr to the current tx base address
     writeRegister(REG_FIFO_ADDR_PTR, 0x00)
-
     addr=(REG_FIFO | 0x80)
+    addr=[addr]
     i=0
-    listLen=(len(buffer)+1)
-    listBuffer=[None]*listLen
-    listBuffer[0]=addr
-    while (i < len(buffer)):
-        listBuffer[i+1]=buffer[i]
-        i=i+1
-
     select()
-    spi.xfer2(listBuffer)
+    spi.xfer2(addr)
+    spi.xfer2(buffer)
     unselect()
 
     #go into transmit mode
     MODE_TX()
-    print("sending")
     x = readRegister(REG_IRQ_FLAGS)
     #once TxDone has flipped, everything has been sent
     while ((x[0] & 0x08) == 0x00):
-        print(".")
-    print(" done sending!")
-    #clear the flags 0x08 is the TxDone flag
-    writeRegister(REG_IRQ_FLAGS, 0x08)
-
+        x = readRegister(REG_IRQ_FLAGS)
+    print("...done sending!")
+    writeRegister(REG_IRQ_FLAGS, 0x08)  #clear the flags 0x08 is the TxDone flag
 
 #Init Setup
 spi = spidev.SpiDev()
@@ -209,7 +186,6 @@ writeRegister(REG_PAYLOAD_LENGTH, PAYLOAD_LENGTH)
 #Change the DIO mapping to 01 so we can listen for TxDone on the interrupt
 writeRegister(REG_DIO_MAPPING_1, 0x40)
 writeRegister(REG_DIO_MAPPING_2, 0x00)
-
 #Go to standby mode
 MODE_STANDBY()
 #Preamble config
@@ -219,17 +195,14 @@ writeRegister(RegPreambleLsb, 0x0C)
 writeRegister(REG_MODEM_CONFIG2, ModemConfig2)
 writeRegister(RegDetectOptimize, DetectOptimize)
 writeRegister(RegDetectionThreshold, DetectionThreshold)
-#startReceiving()
 print("Setup Complete")
 
 while True:
-    sendData(payload)
+    buffer=[0x65,0x66,0x67,0x68,0x69,0x70,0x71,0x72,0x73,0x74]
+    print('payload', buffer)
+    sendData(buffer)
     time.sleep(10)
-
-
-reg_print=readRegister(REG_OPMODE)
+    x = readRegister(REG_IRQ_FLAGS)
 
 GPIO.cleanup()  #devuelve los pines a su estado inicial
 spi.close()
-
-print(format(reg_print[0], '02x'))
